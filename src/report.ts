@@ -1,85 +1,31 @@
-import { readdirSync, readFileSync } from "node:fs";
 import { WebClient } from "@slack/web-api";
 import { fetchAllMembers, getPresenceLogs } from "./presence";
 
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 
-// Checked once on first report
+// Checked once on startup
 let useCustomEmoji: boolean | null = null;
-
-async function uploadEmojis(token: string): Promise<number> {
-  const dir = "./emojis";
-  let files: string[];
-  try {
-    files = readdirSync(dir).filter((f) => f.endsWith(".png"));
-  } catch {
-    console.error("[emoji] emojis/ directory not found, skipping upload.");
-    return 0;
-  }
-
-  let uploaded = 0;
-  for (const file of files) {
-    const name = file.replace(".png", "");
-    const data = readFileSync(`${dir}/${file}`);
-    const blob = new Blob([data], { type: "image/png" });
-
-    const form = new FormData();
-    form.append("token", token);
-    form.append("name", name);
-    form.append("mode", "data");
-    form.append("image", blob, file);
-
-    const res = await fetch("https://slack.com/api/emoji.add", {
-      method: "POST",
-      body: form,
-    });
-    const json = (await res.json()) as { ok: boolean; error?: string };
-
-    if (json.ok) {
-      uploaded++;
-    } else if (json.error !== "error_name_taken") {
-      console.error(`[emoji] Failed to upload :${name}:: ${json.error}`);
-    }
-
-    // Rate limit: ~20 req/min
-    await new Promise((r) => setTimeout(r, 3000));
-  }
-  return uploaded;
-}
 
 export async function ensureCustomEmoji(): Promise<boolean> {
   if (useCustomEmoji !== null) {
-    return useCustomEmoji;
+      return useCustomEmoji;
   }
 
-  // Check if emojis already exist
   try {
     const res = await slack.emoji.list();
-    if (res.emoji?.["p-12pm-g"]) {
-      useCustomEmoji = true;
-      return true;
-    }
+    useCustomEmoji = !!res.emoji?.["p-12pm-g"];
   } catch {
-    // Can't check — fall through
+    useCustomEmoji = false;
   }
 
-  // Try auto-upload if user token is available
-  const userToken = process.env.SLACK_USER_TOKEN;
-  if (userToken) {
-    console.log("[emoji] Custom emojis not found, uploading...");
-    const count = await uploadEmojis(userToken);
-    if (count > 0) {
-      console.log(`[emoji] Uploaded ${count} emojis.`);
-      useCustomEmoji = true;
-      return true;
-    }
+  if (useCustomEmoji) {
+    console.log("[emoji] Custom emoji aliases found.");
+  } else {
+    console.log(
+      "[emoji] Custom emoji aliases not found, using Unicode fallback. Run `bun scripts/upload-emoji.ts` to enable hover labels."
+    );
   }
-
-  useCustomEmoji = false;
-  console.log(
-    "[report] Custom emojis not found, using Unicode fallback. Set SLACK_USER_TOKEN to auto-upload."
-  );
-  return false;
+  return useCustomEmoji;
 }
 
 function getReportWindow(): { from: Date; to: Date } {

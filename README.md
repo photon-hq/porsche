@@ -53,18 +53,27 @@ Fill in your `.env`:
 SLACK_BOT_TOKEN=xoxb-your-bot-token
 SLACK_SIGNING_SECRET=your-signing-secret
 SLACK_REPORT_CHANNEL=C0123456789
-SLACK_USER_TOKEN=xoxp-your-user-token  # Optional: enables custom emoji hover labels
 PORT=3000
 TZ=America/Los_Angeles  # Optional: defaults to PST
 ```
 
 To find `SLACK_REPORT_CHANNEL`: open the channel in Slack → click channel name → scroll to bottom of About panel → copy Channel ID.
 
-### 4. Add the bot to your report channel
+### 4. Set up emoji aliases (optional)
+
+Create 96 emoji aliases so users can hover blocks to see the hour (e.g. `:p-6pm-g:` → `:large_green_square:`).
+
+```bash
+bun scripts/upload-emoji.ts
+```
+
+The script will ask for your workspace name and a browser cookie — follow the on-screen instructions. Only needs to be done once per workspace. Without it, the bot falls back to standard Unicode blocks (no hover labels).
+
+### 5. Add the bot to your report channel
 
 In Slack, go to the channel and run `/invite @your-bot-name`.
 
-### 5. Run
+### 6. Run
 
 ```bash
 bun src/index.ts
@@ -86,8 +95,7 @@ src/
   index.ts       — Entry point: bot setup, Elysia server, schedulers
   presence.ts    — Presence polling, in-memory storage, member fetching
   report.ts      — Report generation and posting
-emojis/              — Custom emoji PNGs (auto-uploaded on first run if SLACK_USER_TOKEN is set)
 scripts/
-  setup-emoji.ts   — Regenerates emoji PNGs
-  upload-emoji.ts  — Manual bulk-upload alternative
+  setup-emoji.ts   — Generates emoji PNGs (only needed if uploading images instead of aliases)
+  upload-emoji.ts  — Creates emoji aliases in Slack workspace
 ```
