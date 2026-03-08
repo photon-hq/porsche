@@ -47,7 +47,7 @@ async function uploadEmojis(token: string): Promise<number> {
   return uploaded;
 }
 
-async function ensureCustomEmoji(): Promise<boolean> {
+export async function ensureCustomEmoji(): Promise<boolean> {
   if (useCustomEmoji !== null) {
     return useCustomEmoji;
   }
@@ -224,7 +224,7 @@ export async function generateAndPostReport() {
     return;
   }
 
-  const custom = await ensureCustomEmoji();
+  const custom = useCustomEmoji ?? false;
   const text = buildReport(from, to, 24, members, custom);
   await slack.chat.postMessage({
     channel: channelId,
@@ -256,7 +256,7 @@ export async function generateOnDemandReport(channelId: string) {
     return;
   }
 
-  const custom = await ensureCustomEmoji();
+  const custom = useCustomEmoji ?? false;
   const text = buildReport(from, to, 24, members, custom);
   await slack.chat.postMessage({
     channel: channelId,

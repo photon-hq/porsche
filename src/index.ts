@@ -6,7 +6,11 @@ import { createMemoryState } from "@chat-adapter/state-memory";
 import { Chat } from "chat";
 import { Elysia } from "elysia";
 import { cleanOldLogs, pollPresence } from "./presence";
-import { generateAndPostReport, generateOnDemandReport } from "./report";
+import {
+  ensureCustomEmoji,
+  generateAndPostReport,
+  generateOnDemandReport,
+} from "./report";
 
 const bot = new Chat({
   userName: "activity-bot",
@@ -55,7 +59,10 @@ bot.onSlashCommand("/porsche", async (event) => {
   await generateOnDemandReport(channelId);
 });
 
-// Run initial poll on startup
+// Check/upload custom emojis and run initial poll on startup
+ensureCustomEmoji().catch((err) =>
+  console.error("[startup] Emoji check failed:", err)
+);
 pollPresence().catch((err) =>
   console.error("[startup] Initial poll failed:", err)
 );
