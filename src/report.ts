@@ -140,22 +140,9 @@ export async function generateAndPostReport(bot: Chat) {
   console.log(`[report] Posted daily report to ${channelId}`);
 }
 
-// On-demand report: today 10am → current hour (excludes current incomplete hour)
+// On-demand report: last 24 completed hours
 export async function generateOnDemandReport(bot: Chat, channelId: string) {
   const now = new Date();
-  const from = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-    10,
-    0,
-    0
-  );
-
-  // If before 10am, start from yesterday 10am
-  if (now.getHours() < 10) {
-    from.setDate(from.getDate() - 1);
-  }
 
   // End at the start of the current hour (exclude incomplete hour)
   const to = new Date(
@@ -167,7 +154,10 @@ export async function generateOnDemandReport(bot: Chat, channelId: string) {
     0
   );
 
-  const hours = Math.floor((to.getTime() - from.getTime()) / (1000 * 3600));
+  // Start 24 hours before that
+  const from = new Date(to.getTime() - 24 * 60 * 60 * 1000);
+
+  const hours = 24;
   if (hours <= 0) {
     const channel = bot.channel(`slack:${channelId}`);
     await channel.post({ markdown: "No completed hours to report yet." });
