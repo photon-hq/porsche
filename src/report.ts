@@ -102,8 +102,9 @@ function buildReport(
     const hour = (startHour + h) % 24;
     labels.push(formatHourLabel(hour));
   }
+  // Each emoji is ~2 monospace chars wide, so pad each label to cover 2 emoji slots
   const labelRow = labels
-    .map((l, i) => (i % 2 === 0 ? l.padEnd(2) : ""))
+    .map((l, i) => (i % 2 === 0 ? l.padEnd(4) : ""))
     .join("");
 
   let report = `📊 *Activity Report*\n_${fromStr} ${formatTime(from)} → ${toStr} ${formatTime(to)}_\n\n`;
