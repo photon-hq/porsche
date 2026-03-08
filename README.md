@@ -34,6 +34,10 @@ bun install
 2. Add bot scopes under **OAuth & Permissions**:
    - `users:read`
    - `chat:write`
+   - `channels:join`
+   - `channels:read`
+   - `commands`
+   - `emoji:read`
 3. Enable **Event Subscriptions** with request URL: `https://your-domain/api/webhooks/slack`
    - Subscribe to bot event: `app_mention`
 4. Create a **Slash Command**:
