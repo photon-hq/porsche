@@ -1,0 +1,23 @@
+{
+  "name": "porsche",
+  "module": "src/index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@biomejs/biome": "2.4.5",
+    "@types/bun": "latest",
+    "ultracite": "7.2.5"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@chat-adapter/slack": "^4.18.0",
+    "@chat-adapter/state-memory": "^4.18.0",
+    "chat": "^4.18.0",
+    "elysia": "^1.4.27"
+  },
+  "scripts": {
+    "check": "ultracite check",
+    "fix": "ultracite fix"
+  }
+}
