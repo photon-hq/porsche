@@ -11,14 +11,14 @@ A Slack bot that tracks team presence and posts daily activity reports. Built wi
 
 ### Activity indicators
 
-Each block represents one hour:
+Each block represents one hour. Hover any block to see the hour it represents.
 
-| Emoji | Meaning | Away time |
+| Color | Meaning | Away time |
 |-------|---------|-----------|
-| 🟩 | Active | ≤ 10 min |
-| 🟨 | Partially away | ≤ 25 min |
-| 🟥 | Away | > 25 min |
-| ⬜ | No data | Bot wasn't running |
+| Green | Active | ≤ 10 min |
+| Yellow | Partially away | ≤ 25 min |
+| Red | Away | > 25 min |
+| Gray | No data | Bot wasn't running |
 
 ## Setup
 
@@ -28,7 +28,11 @@ Each block represents one hour:
 bun install
 ```
 
-### 2. Create a Slack app
+### 2. Upload custom emojis
+
+The report uses custom Slack emojis so each block shows the hour on hover. The 96 PNG files are in `emojis/` (24 hours × 4 colors). Upload them to Slack under **Settings → Customize → Emoji**, using the filename (without `.png`) as the emoji name.
+
+### 3. Create a Slack app
 
 1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From scratch**
 2. Add bot scopes under **OAuth & Permissions**:
@@ -41,7 +45,7 @@ bun install
    - Request URL: `https://your-domain/api/webhooks/slack`
 5. **Install to Workspace** and copy the Bot Token and Signing Secret
 
-### 3. Configure environment
+### 4. Configure environment
 
 ```bash
 cp .env.example .env
@@ -59,11 +63,11 @@ TZ=America/Los_Angeles  # Optional: defaults to PST
 
 To find `SLACK_REPORT_CHANNEL`: open the channel in Slack → click channel name → scroll to bottom of About panel → copy Channel ID.
 
-### 4. Add the bot to your report channel
+### 5. Add the bot to your report channel
 
 In Slack, go to the channel and run `/invite @your-bot-name`.
 
-### 5. Run
+### 6. Run
 
 ```bash
 bun src/index.ts
@@ -85,4 +89,6 @@ src/
   index.ts       — Entry point: bot setup, Elysia server, schedulers
   presence.ts    — Presence polling, in-memory storage, member fetching
   report.ts      — Report generation and posting
+scripts/
+  setup-emoji.ts — Generates custom emoji PNGs for Slack
 ```

@@ -15,33 +15,36 @@ function getReportWindow(): { from: Date; to: Date } {
   return { from, to };
 }
 
-function getActivityEmoji(awayMinutes: number): string {
-  if (awayMinutes <= 10) {
-    return "🟩";
+// Must match scripts/setup-emoji.ts hourLabel()
+function emojiHourLabel(h: number): string {
+  if (h === 0) {
+    return "12am";
   }
-  if (awayMinutes <= 25) {
-    return "🟨";
+  if (h < 12) {
+    return `${h}am`;
   }
-  return "🟥";
+  if (h === 12) {
+    return "12pm";
+  }
+  return `${h - 12}pm`;
 }
 
-function formatHourLabel(hour: number): string {
-  if (hour === 0) {
-    return "12a";
+function getActivityEmoji(awayMinutes: number, hour: number): string {
+  const h = emojiHourLabel(hour);
+  if (awayMinutes <= 10) {
+    return `:p-${h}-g:`;
   }
-  if (hour < 12) {
-    return `${hour}a`;
+  if (awayMinutes <= 25) {
+    return `:p-${h}-y:`;
   }
-  if (hour === 12) {
-    return "12p";
-  }
-  return `${hour - 12}p`;
+  return `:p-${h}-r:`;
 }
 
 function buildUserRow(
   userId: string,
   displayName: string,
   fromEpoch: number,
+  startHour: number,
   hours: number
 ): string {
   const logs = getPresenceLogs(userId, fromEpoch, fromEpoch + hours * 3600);
@@ -50,13 +53,14 @@ function buildUserRow(
   for (let h = 0; h < hours; h++) {
     const hourStart = fromEpoch + h * 3600;
     const hourEnd = hourStart + 3600;
+    const currentHour = (startHour + h) % 24;
 
     const hourLogs = logs.filter(
       (l) => l.timestamp >= hourStart && l.timestamp < hourEnd
     );
 
     if (hourLogs.length === 0) {
-      blocks += "⬜";
+      blocks += `:p-${emojiHourLabel(currentHour)}-n:`;
       continue;
     }
 
@@ -64,7 +68,7 @@ function buildUserRow(
     const totalCount = hourLogs.length;
     const awayMinutes = Math.round((awayCount / totalCount) * 60);
 
-    blocks += getActivityEmoji(awayMinutes);
+    blocks += getActivityEmoji(awayMinutes, currentHour);
   }
 
   return `*${displayName}*\n${blocks}`;
@@ -96,23 +100,18 @@ function buildReport(
     day: "numeric",
   });
 
-  // Build hour labels
-  const labels: string[] = [];
-  for (let h = 0; h < hours; h++) {
-    const hour = (startHour + h) % 24;
-    labels.push(formatHourLabel(hour));
-  }
-  // Each emoji is ~2 monospace chars wide, so pad each label to cover 2 emoji slots
-  const labelRow = labels
-    .map((l, i) => (i % 2 === 0 ? l.padEnd(4) : ""))
-    .join("");
-
   let report = `📊 *Activity Report*\n_${fromStr} ${formatTime(from)} → ${toStr} ${formatTime(to)}_\n\n`;
-  report += "🟩 active  🟨 partially away  🟥 away  ⬜ no data\n";
-  report += `\`${labelRow}\`\n\n`;
+  report +=
+    ":p-12pm-g: active  :p-12pm-y: partially away  :p-12pm-r: away  :p-12pm-n: no data\n\n";
 
   for (const member of members) {
-    const row = buildUserRow(member.id, member.realName, fromEpoch, hours);
+    const row = buildUserRow(
+      member.id,
+      member.realName,
+      fromEpoch,
+      startHour,
+      hours
+    );
     report += `${row}\n\n`;
   }
 
