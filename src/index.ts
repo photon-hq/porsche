@@ -46,8 +46,8 @@ setInterval(async () => {
   }
 }, 60 * 1000);
 
-// Slash command: /report
-bot.onSlashCommand("/report", async (event) => {
+// Slash command: /porsche
+bot.onSlashCommand("/porsche", async (event) => {
   const channelId = event.channel.id.split(":")[1] ?? "";
   await generateOnDemandReport(bot, channelId);
 });
