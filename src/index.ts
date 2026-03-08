@@ -40,7 +40,7 @@ setInterval(async () => {
     lastReportDate = dateKey;
     console.log("[scheduler] Triggering daily report...");
     try {
-      await generateAndPostReport(bot);
+      await generateAndPostReport();
       // Clean logs older than 48 hours
       cleanOldLogs(Math.floor(Date.now() / 1000) - 48 * 3600);
     } catch (err) {
@@ -52,7 +52,7 @@ setInterval(async () => {
 // Slash command: /porsche
 bot.onSlashCommand("/porsche", async (event) => {
   const channelId = event.channel.id.split(":")[1] ?? "";
-  await generateOnDemandReport(bot, channelId);
+  await generateOnDemandReport(channelId);
 });
 
 // Run initial poll on startup
@@ -62,6 +62,16 @@ pollPresence().catch((err) =>
 
 new Elysia()
   .post("/api/webhooks/slack", ({ request }) => bot.webhooks.slack(request))
+  .get("/emoji/:file", ({ params }) => {
+    // biome-ignore lint/correctness/noUndeclaredVariables: Bun global
+    const file = Bun.file(`./emojis/${params.file}`);
+    return new Response(file, {
+      headers: {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=31536000",
+      },
+    });
+  })
   .get("/", () => "Activity Bot Running")
   .listen(Number(process.env.PORT) || 3000);
 

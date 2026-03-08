@@ -28,11 +28,7 @@ Each block represents one hour. Hover any block to see the hour it represents.
 bun install
 ```
 
-### 2. Upload custom emojis
-
-The report uses custom Slack emojis so each block shows the hour on hover. The 96 PNG files are in `emojis/` (24 hours × 4 colors). Upload them to Slack under **Settings → Customize → Emoji**, using the filename (without `.png`) as the emoji name.
-
-### 3. Create a Slack app
+### 2. Create a Slack app
 
 1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From scratch**
 2. Add bot scopes under **OAuth & Permissions**:
@@ -45,7 +41,7 @@ The report uses custom Slack emojis so each block shows the hour on hover. The 9
    - Request URL: `https://your-domain/api/webhooks/slack`
 5. **Install to Workspace** and copy the Bot Token and Signing Secret
 
-### 4. Configure environment
+### 3. Configure environment
 
 ```bash
 cp .env.example .env
@@ -57,17 +53,18 @@ Fill in your `.env`:
 SLACK_BOT_TOKEN=xoxb-your-bot-token
 SLACK_SIGNING_SECRET=your-signing-secret
 SLACK_REPORT_CHANNEL=C0123456789
+APP_URL=https://your-domain
 PORT=3000
 TZ=America/Los_Angeles  # Optional: defaults to PST
 ```
 
 To find `SLACK_REPORT_CHANNEL`: open the channel in Slack → click channel name → scroll to bottom of About panel → copy Channel ID.
 
-### 5. Add the bot to your report channel
+### 4. Add the bot to your report channel
 
 In Slack, go to the channel and run `/invite @your-bot-name`.
 
-### 6. Run
+### 5. Run
 
 ```bash
 bun src/index.ts
@@ -89,6 +86,7 @@ src/
   index.ts       — Entry point: bot setup, Elysia server, schedulers
   presence.ts    — Presence polling, in-memory storage, member fetching
   report.ts      — Report generation and posting
+emojis/            — Colored square PNGs served as Block Kit images
 scripts/
-  setup-emoji.ts — Generates custom emoji PNGs for Slack
+  setup-emoji.ts   — Regenerates emoji PNGs if needed
 ```
