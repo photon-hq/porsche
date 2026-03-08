@@ -53,7 +53,7 @@ Fill in your `.env`:
 SLACK_BOT_TOKEN=xoxb-your-bot-token
 SLACK_SIGNING_SECRET=your-signing-secret
 SLACK_REPORT_CHANNEL=C0123456789
-APP_URL=https://your-domain
+SLACK_USER_TOKEN=xoxp-your-user-token  # Optional: enables custom emoji hover labels
 PORT=3000
 TZ=America/Los_Angeles  # Optional: defaults to PST
 ```
@@ -86,7 +86,8 @@ src/
   index.ts       — Entry point: bot setup, Elysia server, schedulers
   presence.ts    — Presence polling, in-memory storage, member fetching
   report.ts      — Report generation and posting
-emojis/            — Colored square PNGs served as Block Kit images
+emojis/              — Custom emoji PNGs (auto-uploaded on first run if SLACK_USER_TOKEN is set)
 scripts/
-  setup-emoji.ts   — Regenerates emoji PNGs if needed
+  setup-emoji.ts   — Regenerates emoji PNGs
+  upload-emoji.ts  — Manual bulk-upload alternative
 ```

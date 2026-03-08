@@ -62,16 +62,6 @@ pollPresence().catch((err) =>
 
 new Elysia()
   .post("/api/webhooks/slack", ({ request }) => bot.webhooks.slack(request))
-  .get("/emoji/:file", ({ params }) => {
-    // biome-ignore lint/correctness/noUndeclaredVariables: Bun global
-    const file = Bun.file(`./emojis/${params.file}`);
-    return new Response(file, {
-      headers: {
-        "Content-Type": "image/png",
-        "Cache-Control": "public, max-age=31536000",
-      },
-    });
-  })
   .get("/", () => "Activity Bot Running")
   .listen(Number(process.env.PORT) || 3000);
 

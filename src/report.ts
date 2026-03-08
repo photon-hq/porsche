@@ -1,10 +1,86 @@
-import type { KnownBlock } from "@slack/web-api";
+import { readdirSync, readFileSync } from "node:fs";
 import { WebClient } from "@slack/web-api";
 import { fetchAllMembers, getPresenceLogs } from "./presence";
 
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
-const APP_URL =
-  process.env.APP_URL || `http://localhost:${process.env.PORT || 3000}`;
+
+// Checked once on first report
+let useCustomEmoji: boolean | null = null;
+
+async function uploadEmojis(token: string): Promise<number> {
+  const dir = "./emojis";
+  let files: string[];
+  try {
+    files = readdirSync(dir).filter((f) => f.endsWith(".png"));
+  } catch {
+    console.error("[emoji] emojis/ directory not found, skipping upload.");
+    return 0;
+  }
+
+  let uploaded = 0;
+  for (const file of files) {
+    const name = file.replace(".png", "");
+    const data = readFileSync(`${dir}/${file}`);
+    const blob = new Blob([data], { type: "image/png" });
+
+    const form = new FormData();
+    form.append("token", token);
+    form.append("name", name);
+    form.append("mode", "data");
+    form.append("image", blob, file);
+
+    const res = await fetch("https://slack.com/api/emoji.add", {
+      method: "POST",
+      body: form,
+    });
+    const json = (await res.json()) as { ok: boolean; error?: string };
+
+    if (json.ok) {
+      uploaded++;
+    } else if (json.error !== "error_name_taken") {
+      console.error(`[emoji] Failed to upload :${name}:: ${json.error}`);
+    }
+
+    // Rate limit: ~20 req/min
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  return uploaded;
+}
+
+async function ensureCustomEmoji(): Promise<boolean> {
+  if (useCustomEmoji !== null) {
+    return useCustomEmoji;
+  }
+
+  // Check if emojis already exist
+  try {
+    const res = await slack.emoji.list();
+    if (res.emoji?.["p-12pm-g"]) {
+      useCustomEmoji = true;
+      return true;
+    }
+  } catch {
+    // Can't check — fall through
+  }
+
+  // Try auto-upload if user token is available
+  const userToken = process.env.SLACK_USER_TOKEN;
+  if (userToken) {
+    console.log("[emoji] Custom emojis not found, uploading...");
+    const count = await uploadEmojis(userToken);
+    if (count > 0) {
+      console.log(`[emoji] Uploaded ${count} emojis.`);
+      useCustomEmoji = true;
+      return true;
+    }
+  }
+
+  useCustomEmoji = false;
+  console.log(
+    "[report] Custom emojis not found, using Unicode fallback. Set SLACK_USER_TOKEN to auto-upload."
+  );
+  return false;
+}
 
 function getReportWindow(): { from: Date; to: Date } {
   const now = new Date();
@@ -33,80 +109,54 @@ function emojiHourLabel(h: number): string {
   return `${h - 12}pm`;
 }
 
-interface HourStatus {
-  label: string;
-  suffix: string;
-}
+const UNICODE_EMOJI = {
+  g: "🟩",
+  y: "🟨",
+  r: "🟥",
+  n: "⬜",
+} as const;
 
-function getHourStatus(awayMinutes: number): HourStatus {
+function getHourSuffix(awayMinutes: number): "g" | "y" | "r" {
   if (awayMinutes <= 10) {
-    return { suffix: "g", label: "active" };
+    return "g";
   }
   if (awayMinutes <= 25) {
-    return { suffix: "y", label: "partially away" };
+    return "y";
   }
-  return { suffix: "r", label: "away" };
+  return "r";
 }
 
-function imageEl(hourLabel: string, suffix: string, altText: string) {
-  return {
-    type: "image" as const,
-    image_url: `${APP_URL}/emoji/p-${hourLabel}-${suffix}.png`,
-    alt_text: altText,
-  };
-}
-
-function buildUserBlocks(
+function buildUserRow(
   userId: string,
-  displayName: string,
   fromEpoch: number,
   startHour: number,
-  hours: number
-): KnownBlock[] {
+  hours: number,
+  custom: boolean
+): string {
   const logs = getPresenceLogs(userId, fromEpoch, fromEpoch + hours * 3600);
 
-  const images: ReturnType<typeof imageEl>[] = [];
+  const emojis: string[] = [];
   for (let h = 0; h < hours; h++) {
     const hourStart = fromEpoch + h * 3600;
     const hourEnd = hourStart + 3600;
-    const currentHour = (startHour + h) % 24;
-    const label = emojiHourLabel(currentHour);
+    const label = emojiHourLabel((startHour + h) % 24);
 
     const hourLogs = logs.filter(
       (l) => l.timestamp >= hourStart && l.timestamp < hourEnd
     );
 
     if (hourLogs.length === 0) {
-      images.push(imageEl(label, "n", `${label} — no data`));
+      emojis.push(custom ? `:p-${label}-n:` : UNICODE_EMOJI.n);
       continue;
     }
 
     const awayCount = hourLogs.filter((l) => l.status === "away").length;
-    const totalCount = hourLogs.length;
-    const awayMinutes = Math.round((awayCount / totalCount) * 60);
-    const status = getHourStatus(awayMinutes);
-    images.push(imageEl(label, status.suffix, `${label} — ${status.label}`));
+    const awayMinutes = Math.round((awayCount / hourLogs.length) * 60);
+    const suffix = getHourSuffix(awayMinutes);
+    emojis.push(custom ? `:p-${label}-${suffix}:` : UNICODE_EMOJI[suffix]);
   }
 
-  // Split into context blocks (max 10 elements each)
-  // First block: name + up to 9 images
-  const blocks: KnownBlock[] = [];
-  blocks.push({
-    type: "context",
-    elements: [
-      { type: "mrkdwn", text: `*${displayName}*` },
-      ...images.slice(0, 9),
-    ],
-  });
-
-  for (let i = 9; i < images.length; i += 10) {
-    blocks.push({
-      type: "context",
-      elements: images.slice(i, i + 10),
-    });
-  }
-
-  return blocks;
+  return emojis.join("");
 }
 
 function formatTime(date: Date): string {
@@ -117,15 +167,13 @@ function formatTime(date: Date): string {
   });
 }
 
-function buildBlocks(
+function buildReport(
   from: Date,
   to: Date,
   hours: number,
-  members: { id: string; realName: string }[]
-): KnownBlock[] {
-  const fromEpoch = Math.floor(from.getTime() / 1000);
-  const startHour = from.getHours();
-
+  members: { id: string; realName: string }[],
+  custom: boolean
+): string {
   const fromStr = from.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -135,58 +183,30 @@ function buildBlocks(
     day: "numeric",
   });
 
-  const blocks: KnownBlock[] = [];
+  const fromEpoch = Math.floor(from.getTime() / 1000);
+  const startHour = from.getHours();
 
-  // Header
-  blocks.push({
-    type: "section",
-    text: {
-      type: "mrkdwn",
-      text: `📊 *Activity Report*\n_${fromStr} ${formatTime(from)} → ${toStr} ${formatTime(to)}_`,
-    },
-  });
+  const lines: string[] = [];
+  lines.push(
+    `📊 *Activity Report*\n_${fromStr} ${formatTime(from)} → ${toStr} ${formatTime(to)}_`
+  );
+  lines.push("");
 
-  // Legend
-  blocks.push({
-    type: "context",
-    elements: [
-      imageEl("12pm", "g", "active"),
-      { type: "mrkdwn", text: "active" },
-      imageEl("12pm", "y", "partially away"),
-      { type: "mrkdwn", text: "partially away" },
-      imageEl("12pm", "r", "away"),
-      { type: "mrkdwn", text: "away" },
-      imageEl("12pm", "n", "no data"),
-      { type: "mrkdwn", text: "no data" },
-    ],
-  });
-
-  // User rows
-  for (const member of members) {
-    blocks.push(
-      ...buildUserBlocks(
-        member.id,
-        member.realName,
-        fromEpoch,
-        startHour,
-        hours
-      )
+  if (custom) {
+    lines.push(
+      ":p-12pm-g: active  :p-12pm-y: partially away  :p-12pm-r: away  :p-12pm-n: no data"
     );
+  } else {
+    lines.push("🟩 active  🟨 partially away  🟥 away  ⬜ no data");
   }
 
-  return blocks;
-}
-
-async function postReport(channelId: string, blocks: KnownBlock[]) {
-  // Block Kit has a 50-block limit per message; split if needed
-  const MAX_BLOCKS = 50;
-  for (let i = 0; i < blocks.length; i += MAX_BLOCKS) {
-    await slack.chat.postMessage({
-      channel: channelId,
-      blocks: blocks.slice(i, i + MAX_BLOCKS),
-      text: "Activity Report",
-    });
+  for (const member of members) {
+    lines.push("");
+    lines.push(`*${member.realName}*`);
+    lines.push(buildUserRow(member.id, fromEpoch, startHour, hours, custom));
   }
+
+  return lines.join("\n");
 }
 
 // Daily scheduled report: yesterday 10am → today 10am (24 hours)
@@ -204,8 +224,12 @@ export async function generateAndPostReport() {
     return;
   }
 
-  const blocks = buildBlocks(from, to, 24, members);
-  await postReport(channelId, blocks);
+  const custom = await ensureCustomEmoji();
+  const text = buildReport(from, to, 24, members, custom);
+  await slack.chat.postMessage({
+    channel: channelId,
+    text,
+  });
   console.log(`[report] Posted daily report to ${channelId}`);
 }
 
@@ -232,7 +256,11 @@ export async function generateOnDemandReport(channelId: string) {
     return;
   }
 
-  const blocks = buildBlocks(from, to, 24, members);
-  await postReport(channelId, blocks);
+  const custom = await ensureCustomEmoji();
+  const text = buildReport(from, to, 24, members, custom);
+  await slack.chat.postMessage({
+    channel: channelId,
+    text,
+  });
   console.log(`[report] Posted on-demand report to ${channelId}`);
 }
