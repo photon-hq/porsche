@@ -3,7 +3,7 @@ import { createMemoryState } from "@chat-adapter/state-memory";
 import { Chat } from "chat";
 import { Elysia } from "elysia";
 import { cleanOldLogs, pollPresence } from "./presence";
-import { generateAndPostReport } from "./report";
+import { generateAndPostReport, generateOnDemandReport } from "./report";
 
 const bot = new Chat({
   userName: "activity-bot",
@@ -45,6 +45,12 @@ setInterval(async () => {
     }
   }
 }, 60 * 1000);
+
+// Slash command: /report
+bot.onSlashCommand("/report", async (event) => {
+  const channelId = event.channel.id.split(":")[1] ?? "";
+  await generateOnDemandReport(bot, channelId);
+});
 
 // Run initial poll on startup
 pollPresence().catch((err) =>

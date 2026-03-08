@@ -42,12 +42,12 @@ function buildUserRow(
   userId: string,
   displayName: string,
   fromEpoch: number,
-  toEpoch: number
+  hours: number
 ): string {
-  const logs = getPresenceLogs(userId, fromEpoch, toEpoch);
+  const logs = getPresenceLogs(userId, fromEpoch, fromEpoch + hours * 3600);
 
   let blocks = "";
-  for (let h = 0; h < 24; h++) {
+  for (let h = 0; h < hours; h++) {
     const hourStart = fromEpoch + h * 3600;
     const hourEnd = hourStart + 3600;
 
@@ -70,22 +70,22 @@ function buildUserRow(
   return `*${displayName}*\n${blocks}`;
 }
 
-export async function generateAndPostReport(bot: Chat) {
-  const channelId = process.env.SLACK_REPORT_CHANNEL;
-  if (!channelId) {
-    console.error("[report] SLACK_REPORT_CHANNEL not set");
-    return;
-  }
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
 
-  const { from, to } = getReportWindow();
+function buildReport(
+  from: Date,
+  to: Date,
+  hours: number,
+  members: { id: string; realName: string }[]
+): string {
   const fromEpoch = Math.floor(from.getTime() / 1000);
-  const toEpoch = Math.floor(to.getTime() / 1000);
-
-  const members = await fetchAllMembers();
-  if (members.length === 0) {
-    console.log("[report] No members found, skipping report.");
-    return;
-  }
+  const startHour = from.getHours();
 
   const fromStr = from.toLocaleDateString("en-US", {
     month: "short",
@@ -98,26 +98,92 @@ export async function generateAndPostReport(bot: Chat) {
 
   // Build hour labels
   const labels: string[] = [];
-  for (let h = 0; h < 24; h++) {
-    const hour = (10 + h) % 24;
+  for (let h = 0; h < hours; h++) {
+    const hour = (startHour + h) % 24;
     labels.push(formatHourLabel(hour));
   }
-  // Show labels every 2 hours for readability
   const labelRow = labels
     .map((l, i) => (i % 2 === 0 ? l.padEnd(2) : ""))
     .join("");
 
-  let report = `📊 *Daily Activity Report*\n_${fromStr} 10:00 AM → ${toStr} 10:00 AM_\n\n`;
+  let report = `📊 *Activity Report*\n_${fromStr} ${formatTime(from)} → ${toStr} ${formatTime(to)}_\n\n`;
   report += "🟩 active  🟨 partially away  🟥 away  ⬜ no data\n";
   report += `\`${labelRow}\`\n\n`;
 
   for (const member of members) {
-    const row = buildUserRow(member.id, member.realName, fromEpoch, toEpoch);
+    const row = buildUserRow(member.id, member.realName, fromEpoch, hours);
     report += `${row}\n\n`;
   }
 
+  return report;
+}
+
+// Daily scheduled report: yesterday 10am → today 10am (24 hours)
+export async function generateAndPostReport(bot: Chat) {
+  const channelId = process.env.SLACK_REPORT_CHANNEL;
+  if (!channelId) {
+    console.error("[report] SLACK_REPORT_CHANNEL not set");
+    return;
+  }
+
+  const { from, to } = getReportWindow();
+  const members = await fetchAllMembers();
+  if (members.length === 0) {
+    console.log("[report] No members found, skipping report.");
+    return;
+  }
+
+  const report = buildReport(from, to, 24, members);
   const channel = bot.channel(`slack:${channelId}`);
   await channel.post({ markdown: report });
 
-  console.log(`[report] Posted activity report to ${channelId}`);
+  console.log(`[report] Posted daily report to ${channelId}`);
+}
+
+// On-demand report: today 10am → current hour (excludes current incomplete hour)
+export async function generateOnDemandReport(bot: Chat, channelId: string) {
+  const now = new Date();
+  const from = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    10,
+    0,
+    0
+  );
+
+  // If before 10am, start from yesterday 10am
+  if (now.getHours() < 10) {
+    from.setDate(from.getDate() - 1);
+  }
+
+  // End at the start of the current hour (exclude incomplete hour)
+  const to = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    now.getHours(),
+    0,
+    0
+  );
+
+  const hours = Math.floor((to.getTime() - from.getTime()) / (1000 * 3600));
+  if (hours <= 0) {
+    const channel = bot.channel(`slack:${channelId}`);
+    await channel.post({ markdown: "No completed hours to report yet." });
+    return;
+  }
+
+  const members = await fetchAllMembers();
+  if (members.length === 0) {
+    const channel = bot.channel(`slack:${channelId}`);
+    await channel.post({ markdown: "No members found." });
+    return;
+  }
+
+  const report = buildReport(from, to, hours, members);
+  const channel = bot.channel(`slack:${channelId}`);
+  await channel.post({ markdown: report });
+
+  console.log(`[report] Posted on-demand report to ${channelId}`);
 }
