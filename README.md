@@ -6,8 +6,8 @@ A Slack bot that tracks team presence and posts daily activity reports. Built wi
 
 1. **Polls presence every minute** — calls Slack's `users.getPresence` for each workspace member (excluding guests and bots)
 2. **Stores data in memory** — presence snapshots are kept for 48 hours
-3. **Posts a daily report at 10:00 AM** — covers yesterday 10am to today 10am
-4. **On-demand reports via `/porsche`** — generates a report from today 10am up to the current hour
+3. **Posts a daily report at 10:00 AM** — covers yesterday 10am to today 10am (PST by default, override with `TZ` env var)
+4. **On-demand reports via `/porsche`** — generates a report for the last 24 completed hours
 
 ### Activity indicators
 
@@ -54,6 +54,7 @@ SLACK_BOT_TOKEN=xoxb-your-bot-token
 SLACK_SIGNING_SECRET=your-signing-secret
 SLACK_REPORT_CHANNEL=C0123456789
 PORT=3000
+TZ=America/Los_Angeles  # Optional: defaults to PST
 ```
 
 To find `SLACK_REPORT_CHANNEL`: open the channel in Slack → click channel name → scroll to bottom of About panel → copy Channel ID.
@@ -71,7 +72,7 @@ bun src/index.ts
 ## Usage
 
 - **Daily report**: Automatically posted at 10:00 AM to the configured channel
-- **On-demand report**: Type `/porsche` in any channel to generate a report from 10am to the current hour (excludes the current incomplete hour)
+- **On-demand report**: Type `/porsche` in any channel to generate a rolling 24-hour report up to the current hour (excludes the current incomplete hour)
 
 ## Rate limits
 

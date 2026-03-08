@@ -1,3 +1,6 @@
+// Default to PST, overridable via TZ env var
+process.env.TZ ??= "America/Los_Angeles";
+
 import { createSlackAdapter } from "@chat-adapter/slack";
 import { createMemoryState } from "@chat-adapter/state-memory";
 import { Chat } from "chat";
