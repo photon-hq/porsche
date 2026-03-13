@@ -5,7 +5,7 @@ A Slack bot that tracks team presence and posts daily activity reports. Built wi
 ## How it works
 
 1. **Polls presence every minute** — calls Slack's `users.getPresence` for each workspace member (excluding guests and bots)
-2. **Stores data in memory** — presence snapshots are kept for 48 hours
+2. **Stores data in Redis** — presence snapshots are persisted and kept for 48 hours
 3. **Posts a daily report at 10:00 AM** — covers yesterday 10am to today 10am (PST by default, override with `TZ` env var)
 4. **On-demand reports via `/porsche`** — generates a report for the last 24 completed hours
 
@@ -57,6 +57,7 @@ Fill in your `.env`:
 SLACK_BOT_TOKEN=xoxb-your-bot-token
 SLACK_SIGNING_SECRET=your-signing-secret
 SLACK_REPORT_CHANNEL=C0123456789
+REDIS_URL=redis://localhost:6379
 PORT=3000
 TZ=America/Los_Angeles  # Optional: defaults to PST
 ```
@@ -97,7 +98,7 @@ Slack's `users.getPresence` is rate-limited at ~50 requests/minute. This works f
 ```
 src/
   index.ts       — Entry point: bot setup, Elysia server, schedulers
-  presence.ts    — Presence polling, in-memory storage, member fetching
+  presence.ts    — Presence polling, Redis-backed storage, member fetching
   report.ts      — Report generation and posting
 scripts/
   setup-emoji.ts   — Generates emoji PNGs (only needed if uploading images instead of aliases)
