@@ -1,4 +1,5 @@
 import { WebClient } from "@slack/web-api";
+import { createClient } from "redis";
 
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 
@@ -13,45 +14,105 @@ export interface Member {
   realName: string;
 }
 
-// In-memory presence store: userId -> entries
-const presenceStore = new Map<string, PresenceEntry[]>();
+const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
+const PRESENCE_USER_SET_KEY = "presence:users";
+const PRESENCE_LOG_KEY_PREFIX = "presence:logs:";
 
-export function getPresenceLogs(
+type PresenceRedisClient = ReturnType<typeof createClient>;
+
+let redisClient: PresenceRedisClient | null = null;
+let redisConnectPromise: Promise<PresenceRedisClient | null> | null = null;
+
+function getPresenceLogKey(userId: string): string {
+  return `${PRESENCE_LOG_KEY_PREFIX}${userId}`;
+}
+
+async function getRedisClient(): Promise<PresenceRedisClient | null> {
+  if (redisClient?.isOpen) {
+    return redisClient;
+  }
+
+  if (!redisConnectPromise) {
+    redisConnectPromise = (async () => {
+      try {
+        const client = createClient({ url: REDIS_URL });
+        client.on("error", (err) => {
+          console.error("[presence] Redis error:", err);
+        });
+        await client.connect();
+        redisClient = client;
+        return client;
+      } catch (err) {
+        console.error("[presence] Failed to connect to Redis:", err);
+        return null;
+      }
+    })();
+  }
+
+  return redisConnectPromise;
+}
+
+export async function getPresenceLogs(
   userId: string,
   fromEpoch: number,
   toEpoch: number
-): PresenceEntry[] {
-  const entries = presenceStore.get(userId);
-  if (!entries) {
+): Promise<PresenceEntry[]> {
+  const client = await getRedisClient();
+  if (!client) {
     return [];
   }
-  return entries.filter(
-    (e) => e.timestamp >= fromEpoch && e.timestamp < toEpoch
+
+  const entries = await client.zRangeByScore(
+    getPresenceLogKey(userId),
+    fromEpoch,
+    `(${toEpoch}`
   );
+  const logs: PresenceEntry[] = [];
+  for (const entry of entries) {
+    try {
+      logs.push(JSON.parse(entry) as PresenceEntry);
+    } catch {
+      // Skip malformed entries
+    }
+  }
+  return logs;
 }
 
-export function cleanOldLogs(olderThanEpoch: number) {
-  for (const [userId, entries] of presenceStore) {
-    const filtered = entries.filter((e) => e.timestamp >= olderThanEpoch);
-    if (filtered.length === 0) {
-      presenceStore.delete(userId);
-    } else {
-      presenceStore.set(userId, filtered);
+export async function cleanOldLogs(olderThanEpoch: number) {
+  const client = await getRedisClient();
+  if (!client) {
+    return;
+  }
+
+  const userIds = await client.sMembers(PRESENCE_USER_SET_KEY);
+  for (const userId of userIds) {
+    const key = getPresenceLogKey(userId);
+    await client.zRemRangeByScore(key, "-inf", `(${olderThanEpoch}`);
+    const remaining = await client.zCard(key);
+    if (remaining === 0) {
+      await client.del(key);
+      await client.sRem(PRESENCE_USER_SET_KEY, userId);
     }
   }
 }
 
-function logPresence(userId: string, status: string) {
+async function logPresence(userId: string, status: string) {
+  const client = await getRedisClient();
+  if (!client) {
+    return;
+  }
+
   const entry: PresenceEntry = {
     timestamp: Math.floor(Date.now() / 1000),
     status,
   };
-  const entries = presenceStore.get(userId);
-  if (entries) {
-    entries.push(entry);
-  } else {
-    presenceStore.set(userId, [entry]);
-  }
+
+  const key = getPresenceLogKey(userId);
+  await client.sAdd(PRESENCE_USER_SET_KEY, userId);
+  await client.zAdd(key, {
+    score: entry.timestamp,
+    value: JSON.stringify(entry),
+  });
 }
 
 let cachedMembers: Member[] | null = null;
@@ -100,7 +161,7 @@ export async function pollPresence() {
   for (const member of members) {
     try {
       const res = await slack.users.getPresence({ user: member.id });
-      logPresence(member.id, res.presence ?? "away");
+      await logPresence(member.id, res.presence ?? "away");
     } catch (err) {
       console.error(
         `[presence] Failed to get presence for ${member.name}:`,

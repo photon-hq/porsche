@@ -2,7 +2,7 @@
 process.env.TZ ??= "America/Los_Angeles";
 
 import { createSlackAdapter } from "@chat-adapter/slack";
-import { createMemoryState } from "@chat-adapter/state-memory";
+import { createRedisState } from "@chat-adapter/state-redis";
 import { Chat } from "chat";
 import { Elysia } from "elysia";
 import { cleanOldLogs, pollPresence } from "./presence";
@@ -17,7 +17,7 @@ const bot = new Chat({
   adapters: {
     slack: createSlackAdapter(),
   },
-  state: createMemoryState(),
+  state: createRedisState(),
 });
 
 await bot.initialize();
@@ -46,7 +46,7 @@ setInterval(async () => {
     try {
       await generateAndPostReport();
       // Clean logs older than 48 hours
-      cleanOldLogs(Math.floor(Date.now() / 1000) - 48 * 3600);
+      await cleanOldLogs(Math.floor(Date.now() / 1000) - 48 * 3600);
     } catch (err) {
       console.error("[scheduler] Report failed:", err);
     }
