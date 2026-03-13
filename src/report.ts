@@ -72,14 +72,14 @@ function getHourSuffix(awayMinutes: number): "g" | "y" | "r" {
   return "r";
 }
 
-function buildUserRow(
+async function buildUserRow(
   userId: string,
   fromEpoch: number,
   startHour: number,
   hours: number,
   custom: boolean
-): string {
-  const logs = getPresenceLogs(userId, fromEpoch, fromEpoch + hours * 3600);
+): Promise<string> {
+  const logs = await getPresenceLogs(userId, fromEpoch, fromEpoch + hours * 3600);
 
   const emojis: string[] = [];
   for (let h = 0; h < hours; h++) {
@@ -113,13 +113,13 @@ function formatTime(date: Date): string {
   });
 }
 
-function buildReport(
+async function buildReport(
   from: Date,
   to: Date,
   hours: number,
   members: { id: string; realName: string }[],
   custom: boolean
-): string {
+): Promise<string> {
   const fromStr = from.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -149,7 +149,7 @@ function buildReport(
   for (const member of members) {
     lines.push("");
     lines.push(`*${member.realName}*`);
-    lines.push(buildUserRow(member.id, fromEpoch, startHour, hours, custom));
+    lines.push(await buildUserRow(member.id, fromEpoch, startHour, hours, custom));
   }
 
   return lines.join("\n");
@@ -171,7 +171,7 @@ export async function generateAndPostReport() {
   }
 
   const custom = useCustomEmoji ?? false;
-  const text = buildReport(from, to, 24, members, custom);
+  const text = await buildReport(from, to, 24, members, custom);
   await slack.chat.postMessage({
     channel: channelId,
     text,
@@ -203,7 +203,7 @@ export async function generateOnDemandReport(channelId: string) {
   }
 
   const custom = useCustomEmoji ?? false;
-  const text = buildReport(from, to, 24, members, custom);
+  const text = await buildReport(from, to, 24, members, custom);
   await slack.chat.postMessage({
     channel: channelId,
     text,
